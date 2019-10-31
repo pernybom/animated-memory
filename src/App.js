@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import './App.css';
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
+import axios from 'axios';
 
 //https://threejs.org/examples/webgl_modifier_tessellation.html
 //
@@ -12,27 +13,28 @@ class App extends Component {
     var prevTime = performance.now();
     var velocity = new THREE.Vector3();
     var direction = new THREE.Vector3();
-    var vertex = new THREE.Vector3();
-    var color = new THREE.Color();
     let mouseHold = false;
+    let cubeArray = [];
     const canvas = document.querySelector('#c');
     const init = () => {
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 
-      camera = new THREE.PerspectiveCamera(75, 2, 0.1, 10000);
+      camera = new THREE.PerspectiveCamera(75, 2, 0.1, 1000);
       camera.position.y = 10;
 
       scene = new THREE.Scene();
 
       controls = new PointerLockControls(camera, canvas);
-
+      controls.target = new THREE.Vector3(0, 10, 0);
+      controls.maxDistance = 150;
       scene.add(controls.getObject());
 
-      let pLight = new THREE.PointLight(0xffffff, 0.3);
+      let pLight = new THREE.AmbientLight(0xffffff, 0.3);
       scene.add(pLight);
 
       light = new THREE.DirectionalLight();
       light.position.z = 200;
+      light.position.y = 80;
       light.castShadow = true;
       light.shadow = new THREE.LightShadow(
         new THREE.PerspectiveCamera(50, 1, 10, 2500)
@@ -49,11 +51,12 @@ class App extends Component {
       renderer.shadowMap.type = THREE.PCFShadowMap;
 
       const generateRoom = () => {
-        const size = 60;
+        //walls
+        const size = 100;
         const positions = [
           [size, size, 0],
           [-size, size, 0],
-          [0, 2 * size, 0],
+          [0, 1.2 * size, 0],
           [0, 0, 0],
           [0, size, size],
           [0, size, -size]
@@ -61,7 +64,7 @@ class App extends Component {
         let geometry = new THREE.PlaneBufferGeometry(size * 2, size * 2);
         positions.forEach(position => {
           let material = new THREE.MeshPhongMaterial({
-            color: 0xffffff
+            color: Math.random() * 0xffffff
           });
           let plane = new THREE.Mesh(geometry, material);
           plane.receiveShadow = true;
@@ -70,11 +73,47 @@ class App extends Component {
           scene.add(plane);
         });
 
-        let cubeGeometry = new THREE.BoxGeometry(5, 5, 5);
-        let cubeMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff });
-        let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-        cube.position.set(20, 20, 20);
-        scene.add(cube);
+        //desk
+        let deskGeometry = new THREE.BoxBufferGeometry(80, 6, 6);
+        let deskMaterial = new THREE.MeshPhongMaterial({
+          color: 0xff0a30
+        });
+        let desk = new THREE.Mesh(deskGeometry, deskMaterial);
+        desk.position.set(0, 3, -60);
+        desk.receiveShadow = true;
+        desk.castShadow = true;
+        scene.add(desk);
+        //shelves
+
+        let shelfGeometry = new THREE.BoxBufferGeometry(150, 2, 6);
+        let shelfMaterial = new THREE.MeshPhongMaterial({
+          color: 0x014f15
+        });
+
+        for (let i = 11; i < 71; i += 15) {
+          let shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+          shelf.position.set(0, i, -97);
+          shelf.castShadow = true;
+          shelf.receiveShadow = true;
+          scene.add(shelf);
+        }
+
+        //products
+        let cubeGeometry = new THREE.BoxGeometry(6, 6, 6);
+        for (let x = -60; x <= 60; x += 22) {
+          for (let y = 15; y < 75; y += 15) {
+            let cubeMaterial = new THREE.MeshPhongMaterial({
+              color: Math.random() * 0x00ffff
+            });
+            let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+            cube.velocity = { x: 0, y: 0, z: 0 };
+            cube.position.set(x, y, -97);
+            cube.castShadow = true;
+            cube.receiveShadow = true;
+            cubeArray.push(cube);
+            scene.add(cube);
+          }
+        }
       };
 
       generateRoom();
@@ -99,20 +138,23 @@ class App extends Component {
         );
         if (intersectedObjects.length) {
           this.pickedObject = intersectedObjects[0].object;
-          if (this.pickedObject.geometry.type !== 'PlaneBufferGeometry') {
+          if (this.pickedObject.geometry.type === 'BoxGeometry') {
             this.pickedObjectSavedColor = this.pickedObject.material.emissive.getHex();
             this.pickedObject.material.emissive.setHex(
               (time * 8) % 2 > 1 ? 0xffff00 : 0xff0000
             );
             if (mouseHold) {
+              this.pickedObject.velocity.y = 0;
               let movementVector = new THREE.Vector3();
 
-              this.pickedObject.translateOnAxis(
-                movementVector
-                  .subVectors(camera.position, this.pickedObject.position)
-                  .normalize(),
-                0.5
-              );
+              if (this.pickedObject.position.distanceTo(camera.position) > 15) {
+                this.pickedObject.translateOnAxis(
+                  movementVector
+                    .subVectors(camera.position, this.pickedObject.position)
+                    .normalize(),
+                  0.8
+                );
+              }
             }
           }
         }
@@ -135,18 +177,16 @@ class App extends Component {
 
     const clearPickPosition = () => {
       pickPosition.x = 10000000;
-      pickPosition.y = +10000000;
+      pickPosition.y = 10000000;
     };
 
-    const pickPosition = { x: 0, y: 0 };
+    let pickPosition = { x: 0, y: 0 };
     clearPickPosition();
 
     let movingForward = false;
     let movingBackward = false;
     let movingRight = false;
     let movingLeft = false;
-    let movingUp = false;
-    let movingDown = false;
     var map = {};
 
     onkeydown = function(e) {
@@ -166,7 +206,6 @@ class App extends Component {
         movingLeft = true;
       }
       if (e.key === ' ' || e.keyCode === 32) {
-        movingUp = true;
         velocity.y += 350;
       }
       if (e.key === 'b') {
@@ -234,14 +273,14 @@ class App extends Component {
         raycaster.ray.origin.y -= 10;
         var intersections = raycaster.intersectObjects(objects);
         var onObject = intersections.length > 0;
-        var time = performance.now();
+        time = performance.now();
         var delta = (time - prevTime) / 1000;
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
         velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
         direction.z = Number(movingForward) - Number(movingBackward);
         direction.x = Number(movingRight) - Number(movingLeft);
-        direction.normalize(); // this ensures consistent movingments in all directions
+        direction.normalize(); // this ensures consistent movements in all directions
         if (movingForward || movingBackward)
           velocity.z -= direction.z * 400.0 * delta;
         if (movingLeft || movingRight)
@@ -261,11 +300,20 @@ class App extends Component {
 
       pickHelper.pick(pickPosition, scene, camera, time);
 
-      // cubeArray.forEach(cube => {
-      //   cube.rotation.y += 0.01 * Math.random();
-      //   cube.rotation.z += 0.01 * Math.random();
-      //   cube.rotation.x += 0.01 * Math.random();
-      // });
+      cubeArray.forEach(cube => {
+        cube.velocity.y -= 9.82 * 0.01;
+
+        if (
+          cube.position.y < 3 ||
+          cube.position.z < -95 ||
+          (cube.position.z > -64 &&
+            cube.position.z < -56 &&
+            cube.position.y < 9)
+        ) {
+          cube.velocity.y = 0;
+        }
+        cube.position.y += cube.velocity.y;
+      });
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
     };
