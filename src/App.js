@@ -1,22 +1,34 @@
 import React, { Component } from 'react';
 import './App.css';
 import * as THREE from 'three';
+import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 
 //https://threejs.org/examples/webgl_modifier_tessellation.html
 //
 
 class App extends Component {
   componentDidMount() {
-    let renderer, camera, scene, controls, light;
+    let renderer, camera, scene, controls, light, cameraPole;
+    var prevTime = performance.now();
+    var velocity = new THREE.Vector3();
+    var direction = new THREE.Vector3();
+    var vertex = new THREE.Vector3();
+    var color = new THREE.Color();
+    let mouseHold = false;
     const canvas = document.querySelector('#c');
     const init = () => {
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 
       camera = new THREE.PerspectiveCamera(75, 2, 0.1, 10000);
+      camera.position.y = 10;
 
       scene = new THREE.Scene();
 
-      let pLight = new THREE.PointLight();
+      controls = new PointerLockControls(camera, canvas);
+
+      scene.add(controls.getObject());
+
+      let pLight = new THREE.PointLight(0xffffff, 0.3);
       scene.add(pLight);
 
       light = new THREE.DirectionalLight();
@@ -29,81 +41,43 @@ class App extends Component {
       light.shadow.mapSize.width = window.innerWidth;
       light.shadow.mapSize.height = window.innerHeight;
       scene.add(light);
+      const cameraPole = new THREE.Object3D();
+      scene.add(cameraPole);
+      cameraPole.add(camera);
 
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
 
-      const size = canvas.clientHeight / 1500;
-
-      let cubeArray = [];
-
-      const generateCubes = () => {
-        const cubeOfCubeSize = 1;
-        for (
-          let xIndex = -cubeOfCubeSize;
-          xIndex <= cubeOfCubeSize;
-          xIndex += 5
-        ) {
-          for (
-            let yIndex = -cubeOfCubeSize;
-            yIndex <= cubeOfCubeSize;
-            yIndex += 5
-          ) {
-            for (
-              let zIndex = -cubeOfCubeSize;
-              zIndex <= cubeOfCubeSize;
-              zIndex += 5
-            ) {
-              var geometry = new THREE.BoxGeometry(size, size, size);
-
-              var material = new THREE.MeshPhongMaterial({
-                color: Math.random() * 0xffffff,
-                shininess: 100
-              });
-
-              var cube = new THREE.Mesh(geometry, material);
-              cube.castShadow = true;
-              cube.receiveShadow = true;
-              cube.position.set(xIndex, yIndex, zIndex);
-              cube.velocity = new THREE.Vector3(0, 0, 0);
-              cubeArray.push(cube);
-            }
-          }
-        }
-      };
-      generateCubes();
-      cubeArray.forEach(cube => {
-        scene.add(cube);
-      });
-
       const generateRoom = () => {
         const size = 60;
         const positions = [
-          [size, 0, 0],
-          [-size, 0, 0],
-          [0, size, 0],
-          [0, -size, 0],
-          [0, 0, size],
-          [0, 0, -size]
+          [size, size, 0],
+          [-size, size, 0],
+          [0, 2 * size, 0],
+          [0, 0, 0],
+          [0, size, size],
+          [0, size, -size]
         ];
-        let geometry = new THREE.PlaneGeometry(size * 2, size * 2);
+        let geometry = new THREE.PlaneBufferGeometry(size * 2, size * 2);
         positions.forEach(position => {
           let material = new THREE.MeshPhongMaterial({
-            color: Math.random() * 0xffffff
+            color: 0xffffff
           });
           let plane = new THREE.Mesh(geometry, material);
           plane.receiveShadow = true;
           plane.position.set(position[0], position[1], position[2]);
-          plane.lookAt(0, 0, 0);
+          plane.lookAt(0, size, 0);
           scene.add(plane);
         });
+
+        let cubeGeometry = new THREE.BoxGeometry(5, 5, 5);
+        let cubeMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff });
+        let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.set(20, 20, 20);
+        scene.add(cube);
       };
 
       generateRoom();
-
-      const cameraPole = new THREE.Object3D();
-      scene.add(cameraPole);
-      cameraPole.add(camera);
     };
 
     class PickHelper {
@@ -125,20 +99,22 @@ class App extends Component {
         );
         if (intersectedObjects.length) {
           this.pickedObject = intersectedObjects[0].object;
+          if (this.pickedObject.geometry.type !== 'PlaneBufferGeometry') {
+            this.pickedObjectSavedColor = this.pickedObject.material.emissive.getHex();
+            this.pickedObject.material.emissive.setHex(
+              (time * 8) % 2 > 1 ? 0xffff00 : 0xff0000
+            );
+            if (mouseHold) {
+              let movementVector = new THREE.Vector3();
 
-          this.pickedObjectSavedColor = this.pickedObject.material.emissive.getHex();
-          this.pickedObject.material.emissive.setHex(
-            (time * 8) % 2 > 1 ? 0xffff00 : 0xff0000
-          );
-
-          // let movementVector = new THREE.Vector3();
-
-          // this.pickedObject.translateOnAxis(
-          //   movementVector
-          //     .subVectors(camera.position, this.pickedObject.position)
-          //     .normalize(),
-          //   0.5
-          // );
+              this.pickedObject.translateOnAxis(
+                movementVector
+                  .subVectors(camera.position, this.pickedObject.position)
+                  .normalize(),
+                0.5
+              );
+            }
+          }
         }
       }
     }
@@ -171,68 +147,61 @@ class App extends Component {
     let movingLeft = false;
     let movingUp = false;
     let movingDown = false;
-    let turningRight = false;
-    let turningLeft = false;
     var map = {};
 
     onkeydown = function(e) {
       e.preventDefault();
       map[e.keyCode] = e.type === 'keydown';
 
-      if (e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp' || e.keyCode === 87) {
         movingForward = true;
       }
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown' || e.keyCode === 83) {
         movingBackward = true;
       }
-      if (e.key === 'd') {
+      if (e.keyCode === 39 || e.keyCode === 68) {
         movingRight = true;
       }
-      if (e.key === 'a') {
+      if (e.keyCode === 37 || e.keyCode === 65) {
         movingLeft = true;
       }
-      if (e.key === ' ') {
+      if (e.key === ' ' || e.keyCode === 32) {
         movingUp = true;
+        velocity.y += 350;
       }
-      if (e.key === 'c') {
-        movingDown = true;
+      if (e.key === 'b') {
+        controls.lock();
       }
-      if (e.key === 'ArrowRight') {
-        turningRight = true;
-      }
-      if (e.key === 'ArrowLeft') {
-        turningLeft = true;
+      if (e.key === 'n') {
+        controls.unlock();
       }
     };
     onkeyup = function(e) {
       e.preventDefault();
       map[e.keyCode] = e.type === 'keydown';
 
-      if (e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp' || e.keyCode === 87) {
         movingForward = false;
       }
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown' || e.keyCode === 83) {
         movingBackward = false;
       }
-      if (e.key === 'd') {
+      if (e.keyCode === 39 || e.keyCode === 68) {
         movingRight = false;
       }
-      if (e.key === 'a') {
+      if (e.keyCode === 37 || e.keyCode === 65) {
         movingLeft = false;
       }
-      if (e.key === ' ') {
-        movingUp = false;
-      }
-      if (e.key === 'c') {
-        movingDown = false;
-      }
-      if (e.key === 'ArrowRight') {
-        turningRight = false;
-      }
-      if (e.key === 'ArrowLeft') {
-        turningLeft = false;
-      }
     };
+    let raycaster = new THREE.Raycaster(
+      new THREE.Vector3(),
+      new THREE.Vector3(0, -1, 0),
+      0,
+      10
+    );
+    var objects = [];
+    window.addEventListener('mousedown', () => (mouseHold = true));
+    window.addEventListener('mouseup', () => (mouseHold = false));
     window.addEventListener('mousemove', setPickPosition);
     window.addEventListener('mouseout', clearPickPosition);
     window.addEventListener('mouseleave', clearPickPosition);
@@ -254,38 +223,43 @@ class App extends Component {
 
     var animate = function(time) {
       time *= 0.001;
-
       // cameraPole.rotation.y = time * 0.1;
       if (resizeRendererToDisplaySize(renderer)) {
         const canvas = renderer.domElement;
         camera.aspect = canvas.clientWidth / canvas.clientHeight;
         camera.updateProjectionMatrix();
       }
-      let speed = 1;
+      if (controls.isLocked === true) {
+        raycaster.ray.origin.copy(controls.getObject().position);
+        raycaster.ray.origin.y -= 10;
+        var intersections = raycaster.intersectObjects(objects);
+        var onObject = intersections.length > 0;
+        var time = performance.now();
+        var delta = (time - prevTime) / 1000;
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+        velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
+        direction.z = Number(movingForward) - Number(movingBackward);
+        direction.x = Number(movingRight) - Number(movingLeft);
+        direction.normalize(); // this ensures consistent movingments in all directions
+        if (movingForward || movingBackward)
+          velocity.z -= direction.z * 400.0 * delta;
+        if (movingLeft || movingRight)
+          velocity.x -= direction.x * 400.0 * delta;
+        if (onObject === true) {
+          velocity.y = Math.max(0, velocity.y);
+        }
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        controls.getObject().position.y += velocity.y * delta; // new behavior
+        if (controls.getObject().position.y < 10) {
+          velocity.y = 0;
+          controls.getObject().position.y = 10;
+        }
+        prevTime = time;
+      }
 
-      if (movingForward) {
-        camera.position.z -= speed * Math.cos(camera.rotation.y);
-        camera.position.x -= speed * Math.sin(camera.rotation.y);
-      }
-      if (movingBackward) {
-        camera.position.z += speed * Math.cos(camera.rotation.y);
-        camera.position.x += speed * Math.sin(camera.rotation.y);
-      }
-      if (movingRight) {
-        camera.position.z -= speed * Math.sin(camera.rotation.y);
-        camera.position.x += speed * Math.cos(camera.rotation.y);
-      }
-      if (movingLeft) {
-        camera.position.z += speed * Math.sin(camera.rotation.y);
-        camera.position.x -= speed * Math.cos(camera.rotation.y);
-      }
-
-      movingUp && (camera.position.y += speed);
-      movingDown && (camera.position.y -= speed);
-      turningRight && (camera.rotation.y -= 0.02);
-      turningLeft && (camera.rotation.y += 0.02);
-
-      //pickHelper.pick(pickPosition, scene, camera, time);
+      pickHelper.pick(pickPosition, scene, camera, time);
 
       // cubeArray.forEach(cube => {
       //   cube.rotation.y += 0.01 * Math.random();
