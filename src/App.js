@@ -8,12 +8,13 @@ import axios from 'axios';
 //
 
 class App extends Component {
-  componentDidMount() {
+  async componentDidMount() {
     let renderer, camera, scene, controls, light, cameraPole;
     var prevTime = performance.now();
     var velocity = new THREE.Vector3();
     var direction = new THREE.Vector3();
     let mouseHold = false;
+    let products = await axios.get('http://localhost:5000/api/products');
     let cubeArray = [];
     const canvas = document.querySelector('#c');
     const init = () => {
@@ -52,16 +53,19 @@ class App extends Component {
 
       const generateRoom = () => {
         //walls
-        const size = 100;
+        const roomSize = 100;
         const positions = [
-          [size, size, 0],
-          [-size, size, 0],
-          [0, 1.2 * size, 0],
+          [roomSize, roomSize, 0],
+          [-roomSize, roomSize, 0],
+          [0, 1.2 * roomSize, 0],
           [0, 0, 0],
-          [0, size, size],
-          [0, size, -size]
+          [0, roomSize, roomSize],
+          [0, roomSize, -roomSize]
         ];
-        let geometry = new THREE.PlaneBufferGeometry(size * 2, size * 2);
+        let geometry = new THREE.PlaneBufferGeometry(
+          roomSize * 2,
+          roomSize * 2
+        );
         positions.forEach(position => {
           let material = new THREE.MeshPhongMaterial({
             color: Math.random() * 0xffffff
@@ -69,50 +73,81 @@ class App extends Component {
           let plane = new THREE.Mesh(geometry, material);
           plane.receiveShadow = true;
           plane.position.set(position[0], position[1], position[2]);
-          plane.lookAt(0, size, 0);
+          plane.lookAt(0, roomSize, 0);
           scene.add(plane);
         });
 
         //desk
-        let deskGeometry = new THREE.BoxBufferGeometry(80, 6, 6);
+        const deskSize = 6;
+        let deskGeometry = new THREE.BoxBufferGeometry(
+          roomSize * 0.8,
+          deskSize,
+          deskSize
+        );
         let deskMaterial = new THREE.MeshPhongMaterial({
           color: 0xff0a30
         });
         let desk = new THREE.Mesh(deskGeometry, deskMaterial);
-        desk.position.set(0, 3, -60);
+        desk.position.set(0, deskSize / 2, -roomSize * 0.6);
         desk.receiveShadow = true;
         desk.castShadow = true;
         scene.add(desk);
-        //shelves
+        //products
+        const cubeSize = 6;
+        const shelfSize = 2;
+        let cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
 
-        let shelfGeometry = new THREE.BoxBufferGeometry(150, 2, 6);
+        let xCoord = -roomSize * 0.6;
+        let yCoord = 10 + cubeSize / 2 + shelfSize;
+
+        products.data.forEach((product, index) => {
+          let x = document.createElement('canvas');
+          let xc = x.getContext('2d');
+          x.width = x.height = 256;
+          xc.shadowColor = '#000';
+          xc.shadowBlur = 7;
+          xc.fillStyle = 'orange';
+          xc.font = '15pt arial bold';
+          console.log(product.item);
+          xc.fillText(product.item + '\n' + product.price, 0, 128);
+
+          let cubeMaterial = new THREE.MeshPhongMaterial({
+            map: new THREE.Texture(x)
+          });
+          cubeMaterial.map.needsUpdate = true;
+
+          let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+          cube.velocity = new THREE.Vector3(0, 0, 0);
+          cube.position.set(xCoord, yCoord, -97);
+          xCoord += cubeSize * 4 - 2;
+          if ((index + 1) % 6 === 0) {
+            xCoord = -roomSize * 0.6;
+            yCoord += 15;
+          }
+          cube.doubleSided = true;
+
+          cube.castShadow = true;
+          cube.receiveShadow = true;
+          cubeArray.push(cube);
+          scene.add(cube);
+        });
+
+        //shelves
+        let shelfGeometry = new THREE.BoxBufferGeometry(
+          1.5 * roomSize,
+          shelfSize,
+          3 * shelfSize
+        );
         let shelfMaterial = new THREE.MeshPhongMaterial({
           color: 0x014f15
         });
 
-        for (let i = 11; i < 71; i += 15) {
+        for (let i = 10 + shelfSize / 2; i < 71; i += 15) {
           let shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
           shelf.position.set(0, i, -97);
           shelf.castShadow = true;
           shelf.receiveShadow = true;
           scene.add(shelf);
-        }
-
-        //products
-        let cubeGeometry = new THREE.BoxGeometry(6, 6, 6);
-        for (let x = -60; x <= 60; x += 22) {
-          for (let y = 15; y < 75; y += 15) {
-            let cubeMaterial = new THREE.MeshPhongMaterial({
-              color: Math.random() * 0x00ffff
-            });
-            let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-            cube.velocity = { x: 0, y: 0, z: 0 };
-            cube.position.set(x, y, -97);
-            cube.castShadow = true;
-            cube.receiveShadow = true;
-            cubeArray.push(cube);
-            scene.add(cube);
-          }
         }
       };
 
@@ -126,12 +161,6 @@ class App extends Component {
         this.pickedObjectSavedColor = 0;
       }
       pick(normalizedPosition, scene, camera, time) {
-        if (this.pickedObject) {
-          this.pickedObject.material.emissive.setHex(
-            this.pickedObjectSavedColor
-          );
-          this.pickedOject = undefined;
-        }
         this.raycaster.setFromCamera(normalizedPosition, camera);
         const intersectedObjects = this.raycaster.intersectObjects(
           scene.children
@@ -139,12 +168,8 @@ class App extends Component {
         if (intersectedObjects.length) {
           this.pickedObject = intersectedObjects[0].object;
           if (this.pickedObject.geometry.type === 'BoxGeometry') {
-            this.pickedObjectSavedColor = this.pickedObject.material.emissive.getHex();
-            this.pickedObject.material.emissive.setHex(
-              (time * 8) % 2 > 1 ? 0xffff00 : 0xff0000
-            );
             if (mouseHold) {
-              this.pickedObject.velocity.y = 0;
+              this.pickedObject.velocity.y = 0.1;
               let movementVector = new THREE.Vector3();
 
               if (this.pickedObject.position.distanceTo(camera.position) > 15) {
