@@ -3,13 +3,14 @@ import './App.css';
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
 //https://threejs.org/examples/webgl_modifier_tessellation.html
 //
 
 class App extends Component {
   async componentDidMount() {
-    let renderer, camera, scene, controls, light, cameraPole;
+    let renderer, camera, scene, controls, light, cart;
     var prevTime = performance.now();
     var velocity = new THREE.Vector3();
     var direction = new THREE.Vector3();
@@ -30,23 +31,20 @@ class App extends Component {
       controls.maxDistance = 150;
       scene.add(controls.getObject());
 
-      let pLight = new THREE.AmbientLight(0xffffff, 0.3);
+      let pLight = new THREE.AmbientLight(0xffffff, 1);
       scene.add(pLight);
 
-      light = new THREE.DirectionalLight();
-      light.position.z = 200;
-      light.position.y = 80;
-      light.castShadow = true;
-      light.shadow = new THREE.LightShadow(
-        new THREE.PerspectiveCamera(50, 1, 10, 2500)
-      );
-      light.shadow.bias = 0.0001;
-      light.shadow.mapSize.width = window.innerWidth;
-      light.shadow.mapSize.height = window.innerHeight;
-      scene.add(light);
-      const cameraPole = new THREE.Object3D();
-      scene.add(cameraPole);
-      cameraPole.add(camera);
+      // light = new THREE.DirectionalLight();
+      // light.position.z = 200;
+      // light.position.y = 80;
+      // light.castShadow = true;
+      // light.shadow = new THREE.LightShadow(
+      //   new THREE.PerspectiveCamera(50, 1, 10, 2500)
+      // );
+      // light.shadow.bias = 0.0001;
+      // light.shadow.mapSize.width = window.innerWidth;
+      // light.shadow.mapSize.height = window.innerHeight;
+      // scene.add(light);
 
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -101,22 +99,26 @@ class App extends Component {
         let yCoord = 10 + cubeSize / 2 + shelfSize;
 
         products.data.forEach((product, index) => {
-          let x = document.createElement('canvas');
-          let xc = x.getContext('2d');
-          x.width = x.height = 256;
-          xc.shadowColor = '#000';
-          xc.shadowBlur = 7;
-          xc.fillStyle = 'orange';
-          xc.font = '15pt arial bold';
-          console.log(product.item);
-          xc.fillText(product.item + '\n' + product.price, 0, 128);
+          let cubeCanvas = document.createElement('canvas');
+          let cubeCanvasContext = cubeCanvas.getContext('2d');
+          cubeCanvas.width = cubeCanvas.height = 256;
+          cubeCanvasContext.shadowColor = '#000';
+          cubeCanvasContext.shadowBlur = 7;
+          cubeCanvasContext.fillStyle = 'orange';
+          cubeCanvasContext.font = '15pt arial bold';
+          cubeCanvasContext.fillText(
+            product.item + ' ' + product.price,
+            0,
+            128
+          );
 
           let cubeMaterial = new THREE.MeshPhongMaterial({
-            map: new THREE.Texture(x)
+            map: new THREE.Texture(cubeCanvas)
           });
           cubeMaterial.map.needsUpdate = true;
 
           let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+          cube.data = product;
           cube.velocity = new THREE.Vector3(0, 0, 0);
           cube.position.set(xCoord, yCoord, -97);
           xCoord += cubeSize * 4 - 2;
@@ -149,6 +151,37 @@ class App extends Component {
           shelf.receiveShadow = true;
           scene.add(shelf);
         }
+
+        //cart
+        let cartGeometry = new THREE.BoxBufferGeometry(20, 10, 15);
+        let cartCanvas = document.createElement('canvas');
+        let cartCanvasContext = cartCanvas.getContext('2d');
+        cartCanvas.width = cartCanvas.height = 256;
+        cartCanvasContext.shadowColor = '#000';
+        cartCanvasContext.shadowBlur = 7;
+        cartCanvasContext.fillStyle = 'grey';
+        cartCanvasContext.fillRect(0, 0, cartCanvas.width, cartCanvas.height);
+
+        cartCanvasContext.fillStyle = 'orange';
+        cartCanvasContext.font = '30pt arial bold';
+        cartCanvasContext.fillText('Cart', 72, 128);
+
+        let cartMaterial = new THREE.MeshPhongMaterial({
+          map: new THREE.Texture(cartCanvas)
+        });
+        cartMaterial.map.needsUpdate = true;
+
+        cart = new THREE.Mesh(cartGeometry, cartMaterial);
+        cart.cartId = Cookies.get('cart');
+        cart.content = [];
+
+        cart.velocity = new THREE.Vector3(0, 0, 0);
+        cart.position.set(40, 5, -40);
+        cart.doubleSided = true;
+        cart.castShadow = true;
+        cart.receiveShadow = true;
+
+        scene.add(cart);
       };
 
       generateRoom();
@@ -169,13 +202,21 @@ class App extends Component {
           this.pickedObject = intersectedObjects[0].object;
           if (this.pickedObject.geometry.type === 'BoxGeometry') {
             if (mouseHold) {
-              this.pickedObject.velocity.y = 0.1;
               let movementVector = new THREE.Vector3();
+              this.pickedObject.velocity.y = 0.2;
 
               if (this.pickedObject.position.distanceTo(camera.position) > 15) {
                 this.pickedObject.translateOnAxis(
                   movementVector
                     .subVectors(camera.position, this.pickedObject.position)
+                    .normalize(),
+                  0.8
+                );
+              }
+              if (this.pickedObject.position.distanceTo(camera.position) < 15) {
+                this.pickedObject.translateOnAxis(
+                  movementVector
+                    .subVectors(this.pickedObject.position, camera.position)
                     .normalize(),
                   0.8
                 );
@@ -285,6 +326,21 @@ class App extends Component {
 
     init();
 
+    // axios
+    //   .post('http://localhost:5000/api/carts/' + Cookies.get('cart'), {
+    //     id: cubeArray[0].data.id,
+    //     item: cubeArray[0].data.item,
+    //     quantity: 1,
+    //     price: 0.01
+    //   })
+    //   .then(res => {
+    //     console.log(res);
+    //   });
+
+    // var helper = new THREE.Box3Helper(cubeBB, 0xffff00);
+    // scene.add(helper);
+    let posted = false;
+
     var animate = function(time) {
       time *= 0.001;
       // cameraPole.rotation.y = time * 0.1;
@@ -325,7 +381,28 @@ class App extends Component {
 
       pickHelper.pick(pickPosition, scene, camera, time);
 
-      cubeArray.forEach(cube => {
+      let cartBB = new THREE.Box3().setFromObject(cart);
+
+      cubeArray.forEach(async cube => {
+        if (
+          cartBB.containsBox(new THREE.Box3().setFromObject(cube)) &&
+          !posted
+        ) {
+          posted = true;
+          await axios
+            .post('http://localhost:5000/api/carts/' + Cookies.get('cart'), {
+              id: cube.data.id,
+              item: cube.data.item,
+              quantity: 1,
+              price: 0.01
+            })
+            .then(res => {
+              console.log(res);
+            })
+            .catch(error => {
+              console.log(error);
+            });
+        }
         cube.velocity.y -= 9.82 * 0.01;
 
         if (
@@ -337,6 +414,7 @@ class App extends Component {
         ) {
           cube.velocity.y = 0;
         }
+
         cube.position.y += cube.velocity.y;
       });
       renderer.render(scene, camera);
