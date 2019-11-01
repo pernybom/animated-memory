@@ -4,13 +4,12 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import axios from 'axios';
 import Cookies from 'js-cookie';
-
-//https://threejs.org/examples/webgl_modifier_tessellation.html
-//
+import generateRoom from './generateRoom';
 
 class App extends Component {
   async componentDidMount() {
     let renderer, camera, scene, controls, light, cart;
+
     var prevTime = performance.now();
     var velocity = new THREE.Vector3();
     var direction = new THREE.Vector3();
@@ -31,160 +30,58 @@ class App extends Component {
       controls.maxDistance = 150;
       scene.add(controls.getObject());
 
-      let pLight = new THREE.AmbientLight(0xffffff, 1);
+      let pLight = new THREE.AmbientLight(0xffffff, 0.3);
       scene.add(pLight);
 
-      // light = new THREE.DirectionalLight();
-      // light.position.z = 200;
-      // light.position.y = 80;
-      // light.castShadow = true;
-      // light.shadow = new THREE.LightShadow(
-      //   new THREE.PerspectiveCamera(50, 1, 10, 2500)
-      // );
-      // light.shadow.bias = 0.0001;
-      // light.shadow.mapSize.width = window.innerWidth;
-      // light.shadow.mapSize.height = window.innerHeight;
-      // scene.add(light);
+      light = new THREE.DirectionalLight();
+      light.position.z = 200;
+      light.position.y = 80;
+      light.castShadow = true;
+      light.shadow = new THREE.LightShadow(
+        new THREE.PerspectiveCamera(50, 1, 10, 2500)
+      );
+      light.shadow.bias = 0.0001;
+      light.shadow.mapSize.width = window.innerWidth;
+      light.shadow.mapSize.height = window.innerHeight;
+      scene.add(light);
 
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
 
-      const generateRoom = () => {
-        //walls
-        const roomSize = 100;
-        const positions = [
-          [roomSize, roomSize, 0],
-          [-roomSize, roomSize, 0],
-          [0, 1.2 * roomSize, 0],
-          [0, 0, 0],
-          [0, roomSize, roomSize],
-          [0, roomSize, -roomSize]
-        ];
-        let geometry = new THREE.PlaneBufferGeometry(
-          roomSize * 2,
-          roomSize * 2
-        );
-        positions.forEach(position => {
-          let material = new THREE.MeshPhongMaterial({
-            color: Math.random() * 0xffffff
-          });
-          let plane = new THREE.Mesh(geometry, material);
-          plane.receiveShadow = true;
-          plane.position.set(position[0], position[1], position[2]);
-          plane.lookAt(0, roomSize, 0);
-          scene.add(plane);
-        });
+      generateRoom({
+        scene,
+        products,
+        cubeArray
+      });
+      //cart
+      let cartGeometry = new THREE.BoxBufferGeometry(20, 10, 15);
+      let cartCanvas = document.createElement('canvas');
+      let cartCanvasContext = cartCanvas.getContext('2d');
+      cartCanvas.width = cartCanvas.height = 256;
+      cartCanvasContext.shadowColor = '#000';
+      cartCanvasContext.shadowBlur = 7;
+      cartCanvasContext.fillStyle = 'grey';
+      cartCanvasContext.fillRect(0, 0, cartCanvas.width, cartCanvas.height);
 
-        //desk
-        const deskSize = 6;
-        let deskGeometry = new THREE.BoxBufferGeometry(
-          roomSize * 0.8,
-          deskSize,
-          deskSize
-        );
-        let deskMaterial = new THREE.MeshPhongMaterial({
-          color: 0xff0a30
-        });
-        let desk = new THREE.Mesh(deskGeometry, deskMaterial);
-        desk.position.set(0, deskSize / 2, -roomSize * 0.6);
-        desk.receiveShadow = true;
-        desk.castShadow = true;
-        scene.add(desk);
-        //products
-        const cubeSize = 6;
-        const shelfSize = 2;
-        let cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+      cartCanvasContext.fillStyle = 'orange';
+      cartCanvasContext.font = '30pt arial bold';
+      cartCanvasContext.fillText('Cart', 72, 128);
 
-        let xCoord = -roomSize * 0.6;
-        let yCoord = 10 + cubeSize / 2 + shelfSize;
+      let cartMaterial = new THREE.MeshPhongMaterial({
+        map: new THREE.Texture(cartCanvas)
+      });
+      cartMaterial.map.needsUpdate = true;
 
-        products.data.forEach((product, index) => {
-          let cubeCanvas = document.createElement('canvas');
-          let cubeCanvasContext = cubeCanvas.getContext('2d');
-          cubeCanvas.width = cubeCanvas.height = 256;
-          cubeCanvasContext.shadowColor = '#000';
-          cubeCanvasContext.shadowBlur = 7;
-          cubeCanvasContext.fillStyle = 'orange';
-          cubeCanvasContext.font = '15pt arial bold';
-          cubeCanvasContext.fillText(
-            product.item + ' ' + product.price,
-            0,
-            128
-          );
+      cart = new THREE.Mesh(cartGeometry, cartMaterial);
+      cart.cartId = Cookies.get('cart');
+      cart.content = [];
 
-          let cubeMaterial = new THREE.MeshPhongMaterial({
-            map: new THREE.Texture(cubeCanvas)
-          });
-          cubeMaterial.map.needsUpdate = true;
-
-          let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-          cube.data = product;
-          cube.velocity = new THREE.Vector3(0, 0, 0);
-          cube.position.set(xCoord, yCoord, -97);
-          xCoord += cubeSize * 4 - 2;
-          if ((index + 1) % 6 === 0) {
-            xCoord = -roomSize * 0.6;
-            yCoord += 15;
-          }
-          cube.doubleSided = true;
-
-          cube.castShadow = true;
-          cube.receiveShadow = true;
-          cubeArray.push(cube);
-          scene.add(cube);
-        });
-
-        //shelves
-        let shelfGeometry = new THREE.BoxBufferGeometry(
-          1.5 * roomSize,
-          shelfSize,
-          3 * shelfSize
-        );
-        let shelfMaterial = new THREE.MeshPhongMaterial({
-          color: 0x014f15
-        });
-
-        for (let i = 10 + shelfSize / 2; i < 71; i += 15) {
-          let shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
-          shelf.position.set(0, i, -97);
-          shelf.castShadow = true;
-          shelf.receiveShadow = true;
-          scene.add(shelf);
-        }
-
-        //cart
-        let cartGeometry = new THREE.BoxBufferGeometry(20, 10, 15);
-        let cartCanvas = document.createElement('canvas');
-        let cartCanvasContext = cartCanvas.getContext('2d');
-        cartCanvas.width = cartCanvas.height = 256;
-        cartCanvasContext.shadowColor = '#000';
-        cartCanvasContext.shadowBlur = 7;
-        cartCanvasContext.fillStyle = 'grey';
-        cartCanvasContext.fillRect(0, 0, cartCanvas.width, cartCanvas.height);
-
-        cartCanvasContext.fillStyle = 'orange';
-        cartCanvasContext.font = '30pt arial bold';
-        cartCanvasContext.fillText('Cart', 72, 128);
-
-        let cartMaterial = new THREE.MeshPhongMaterial({
-          map: new THREE.Texture(cartCanvas)
-        });
-        cartMaterial.map.needsUpdate = true;
-
-        cart = new THREE.Mesh(cartGeometry, cartMaterial);
-        cart.cartId = Cookies.get('cart');
-        cart.content = [];
-
-        cart.velocity = new THREE.Vector3(0, 0, 0);
-        cart.position.set(40, 5, -40);
-        cart.doubleSided = true;
-        cart.castShadow = true;
-        cart.receiveShadow = true;
-
-        scene.add(cart);
-      };
-
-      generateRoom();
+      cart.velocity = new THREE.Vector3(0, 0, 0);
+      cart.position.set(40, 5, -40);
+      cart.doubleSided = true;
+      cart.castShadow = true;
+      cart.receiveShadow = true;
+      scene.add(cart);
     };
 
     class PickHelper {
@@ -298,6 +195,7 @@ class App extends Component {
         movingLeft = false;
       }
     };
+
     let raycaster = new THREE.Raycaster(
       new THREE.Vector3(),
       new THREE.Vector3(0, -1, 0),
@@ -326,24 +224,10 @@ class App extends Component {
 
     init();
 
-    // axios
-    //   .post('http://localhost:5000/api/carts/' + Cookies.get('cart'), {
-    //     id: cubeArray[0].data.id,
-    //     item: cubeArray[0].data.item,
-    //     quantity: 1,
-    //     price: 0.01
-    //   })
-    //   .then(res => {
-    //     console.log(res);
-    //   });
-
-    // var helper = new THREE.Box3Helper(cubeBB, 0xffff00);
-    // scene.add(helper);
     let posted = false;
 
     var animate = function(time) {
       time *= 0.001;
-      // cameraPole.rotation.y = time * 0.1;
       if (resizeRendererToDisplaySize(renderer)) {
         const canvas = renderer.domElement;
         camera.aspect = canvas.clientWidth / canvas.clientHeight;
@@ -380,7 +264,6 @@ class App extends Component {
       }
 
       pickHelper.pick(pickPosition, scene, camera, time);
-
       let cartBB = new THREE.Box3().setFromObject(cart);
 
       cubeArray.forEach(async cube => {
