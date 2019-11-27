@@ -1,11 +1,7 @@
-import React, { Component } from 'react';
 import './App.css';
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
-import axios from 'axios';
-import Cookies from 'js-cookie';
 
-const generateRoom = object => {
+const getRoom = object => {
   //walls
   const roomSize = 100;
   const positions = [
@@ -19,7 +15,7 @@ const generateRoom = object => {
   let geometry = new THREE.PlaneBufferGeometry(roomSize * 2, roomSize * 2);
   positions.forEach(position => {
     let material = new THREE.MeshPhongMaterial({
-      color: Math.random() * 0xffffff
+      color: 0x005073
     });
     let plane = new THREE.Mesh(geometry, material);
     plane.receiveShadow = true;
@@ -36,7 +32,7 @@ const generateRoom = object => {
     deskSize
   );
   let deskMaterial = new THREE.MeshPhongMaterial({
-    color: 0xff0a30
+    color: 0x107dac
   });
   let desk = new THREE.Mesh(deskGeometry, deskMaterial);
   desk.position.set(0, deskSize / 2, -roomSize * 0.6);
@@ -90,7 +86,7 @@ const generateRoom = object => {
     3 * shelfSize
   );
   let shelfMaterial = new THREE.MeshPhongMaterial({
-    color: 0x014f15
+    color: 0x189ad3
   });
 
   for (let i = 10 + shelfSize / 2; i < 71; i += 15) {
@@ -102,4 +98,4 @@ const generateRoom = object => {
   }
 };
 
-export default generateRoom;
+export default getRoom;

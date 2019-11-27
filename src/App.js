@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import generateRoom from './generateRoom';
+import getRoom from './getRoom';
 
 class App extends Component {
   async componentDidMount() {
@@ -48,7 +48,7 @@ class App extends Component {
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
 
-      generateRoom({
+      getRoom({
         scene,
         products,
         cubeArray
@@ -60,7 +60,7 @@ class App extends Component {
       cartCanvas.width = cartCanvas.height = 256;
       cartCanvasContext.shadowColor = '#000';
       cartCanvasContext.shadowBlur = 7;
-      cartCanvasContext.fillStyle = 'grey';
+      cartCanvasContext.fillStyle = 'white';
       cartCanvasContext.fillRect(0, 0, cartCanvas.width, cartCanvas.height);
 
       cartCanvasContext.fillStyle = 'orange';
@@ -150,11 +150,10 @@ class App extends Component {
     let movingBackward = false;
     let movingRight = false;
     let movingLeft = false;
-    var map = {};
 
-    onkeydown = function(e) {
+    //movement
+    onkeydown = e => {
       e.preventDefault();
-      map[e.keyCode] = e.type === 'keydown';
 
       if (e.key === 'ArrowUp' || e.keyCode === 87) {
         movingForward = true;
@@ -178,9 +177,8 @@ class App extends Component {
         controls.unlock();
       }
     };
-    onkeyup = function(e) {
+    onkeyup = e => {
       e.preventDefault();
-      map[e.keyCode] = e.type === 'keydown';
 
       if (e.key === 'ArrowUp' || e.keyCode === 87) {
         movingForward = false;
@@ -202,7 +200,6 @@ class App extends Component {
       0,
       10
     );
-    var objects = [];
     window.addEventListener('mousedown', () => (mouseHold = true));
     window.addEventListener('mouseup', () => (mouseHold = false));
     window.addEventListener('mousemove', setPickPosition);
@@ -225,7 +222,6 @@ class App extends Component {
     init();
 
     let posted = false;
-
     var animate = function(time) {
       time *= 0.001;
       if (resizeRendererToDisplaySize(renderer)) {
@@ -236,8 +232,6 @@ class App extends Component {
       if (controls.isLocked === true) {
         raycaster.ray.origin.copy(controls.getObject().position);
         raycaster.ray.origin.y -= 10;
-        var intersections = raycaster.intersectObjects(objects);
-        var onObject = intersections.length > 0;
         time = performance.now();
         var delta = (time - prevTime) / 1000;
         velocity.x -= velocity.x * 10.0 * delta;
@@ -250,15 +244,20 @@ class App extends Component {
           velocity.z -= direction.z * 400.0 * delta;
         if (movingLeft || movingRight)
           velocity.x -= direction.x * 400.0 * delta;
-        if (onObject === true) {
-          velocity.y = Math.max(0, velocity.y);
-        }
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
         controls.getObject().position.y += velocity.y * delta; // new behavior
         if (controls.getObject().position.y < 10) {
           velocity.y = 0;
           controls.getObject().position.y = 10;
+        }
+        if (
+          controls.getObject().position.z > -64 &&
+          controls.getObject().position.z < -56 &&
+          controls.getObject().position.y < 16
+        ) {
+          velocity.y = 0;
+          controls.getObject().position.y = 16;
         }
         prevTime = time;
       }
