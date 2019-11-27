@@ -14,7 +14,63 @@ class App extends Component {
     var velocity = new THREE.Vector3();
     var direction = new THREE.Vector3();
     let mouseHold = false;
-    let products = await axios.get('http://localhost:5000/api/products');
+    let products = [];
+
+    try {
+      let fetchedProducts = await axios.get(
+        'http://localhost:5000/api/products'
+      );
+      products = fetchedProducts;
+    } catch (error) {
+      products.data = [
+        {
+          id: '2b3c27a8-5ac6-4401-b8c0-e860cfb0e35a',
+          item: 'Naia',
+          price: '0.01',
+          description: 'Gets you hyped '
+        },
+        {
+          id: '2f81a686-7531-11e8-86e5-f0d5bf731f68',
+          item: 'Keychain Phone Charger',
+          price: '29.99',
+          description:
+            'This keychain lightning charger comes with a plug so you’ll be able to charge anywhere with an outlet. Great for the traveller on the go who always needs their phone.'
+        },
+        {
+          id: '39ac2118-7531-11e8-86e5-f0d5bf731f68',
+          item: 'Coffee Mug',
+          price: '11.80',
+          description: 'Classic white coffee mug.'
+        },
+        {
+          id: '4c1aa7d4-7531-11e8-86e5-f0d5bf731f68',
+          item: 'Heat Sensitive Coffee Mug',
+          price: '12.99',
+          description:
+            'This cool coffee will flow with color as you pour warm coffee into it.'
+        },
+        {
+          id: '55bb6ef4-7531-11e8-86e5-f0d5bf731f68',
+          item: 'Heart Shaped Tea Mug',
+          price: '18.55',
+          description:
+            'These glass mugs are perfect for romantic tea in the mornings.'
+        },
+        {
+          id: '5d3b9e7e-7531-11e8-86e5-f0d5bf731f68',
+          item: 'Tiny Zip Knife',
+          price: '21.65',
+          description:
+            'It’s always convenient to have a tiny knife with you. This is the most portable knife we have seen!'
+        },
+        {
+          id: '77b0e5e9-4345-48a7-84d3-c73355e52c2c',
+          item: 'Fresh Tomato',
+          price: 19.09,
+          description: 'Super tasty tomato, its red btw'
+        }
+      ];
+    }
     let cubeArray = [];
     const canvas = document.querySelector('#c');
     const init = () => {
